@@ -71,3 +71,27 @@ def test_on_is_idempotent_and_preserves_import_watermarks(monkeypatch, tmp_path)
     result = enable(project)
 
     assert result["codex_imports"] == {"thread": 42}
+
+
+def test_claude_cleanup_is_authoritative_and_does_not_restore_removed_text(monkeypatch, tmp_path):
+    project, _ = configure(monkeypatch, tmp_path)
+    result = enable(project)
+    native_memory = Path(result["claude_project_dir"]) / "memory" / "MEMORY.md"
+    native_memory.write_text(
+        "# Memory\n\n- current fact\n- stale fact\n- duplicate fact\n- duplicate fact\n",
+        encoding="utf-8",
+    )
+    sync_project(project)
+
+    # Claude may save a cleanup by atomically replacing MEMORY.md, which breaks
+    # the AGENTS/CLAUDE hard link until the next daemon pass.
+    replacement = native_memory.parent / "MEMORY.cleaned"
+    replacement.write_text("# Memory\n\n- current fact\n", encoding="utf-8")
+    os.replace(replacement, native_memory)
+    sync_project(project)
+    sync_project(project)
+
+    expected = "# Memory\n\n- current fact\n"
+    assert (project / "AGENTS.md").read_text(encoding="utf-8") == expected
+    assert (project / "CLAUDE.md").read_text(encoding="utf-8") == expected
+    assert "stale fact" not in native_memory.read_text(encoding="utf-8")

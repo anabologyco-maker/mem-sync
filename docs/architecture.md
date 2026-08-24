@@ -70,6 +70,12 @@ choose Codex, Claude, newest mtime, or lexical order as the winner. It stores
 each original and creates a labeled union that both agents see. This may need a
 human cleanup, but it is lossless and symmetric.
 
+Cleanup is a first-class write, not a merge conflict with history. A sole writer
+may replace or shorten the memory, and that exact result becomes canonical.
+Imported Codex extraction watermarks are retained separately from the Markdown,
+so removing or rewriting an already-imported section does not cause the daemon
+to append the old extraction again.
+
 ## Session migration
 
 Session migration changes the working-directory/project index, not conversation
@@ -95,4 +101,3 @@ Trying to make those prompts identical would weaken the hosts' contracts and
 still would not make their tool semantics equal. mem-sync therefore shares the
 highest portable layer both products officially support: project instructions
 and local durable memory.
-

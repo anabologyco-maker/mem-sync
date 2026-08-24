@@ -71,6 +71,34 @@ can break the link temporarily; the daemon notices and repairs it. If two
 surfaces change before a sync pass, mem-sync retains both versions in a neutral
 merge and stores the originals under `.mem-sync/conflicts/`.
 
+## Merge and cleanup semantics
+
+mem-sync does not continually append every edit:
+
+- A normal edit from either agent is a replacement of the canonical state.
+  Deleting stale lines, consolidating sections, renaming topics, or rewriting
+  the whole memory is preserved exactly and propagated to the other agent.
+- Claude Code writes directly into the canonical memory directory while sync is
+  on. A request such as "clean up your memory" can rewrite `MEMORY.md` and its
+  topic files; removed content stays removed.
+- Each completed Codex native-memory extraction is imported once, identified by
+  its thread and source watermark. Its first import appends a labeled section;
+  after Claude or Codex cleans that section up, the daemon does not resurrect it.
+- If exactly one surface changed since the previous pass, that complete version
+  wins. Multiple identical edits are also unambiguous. Multiple different
+  concurrent edits are retained in a labeled neutral union with originals saved
+  under `.mem-sync/conflicts/`; neither agent silently wins.
+
+For example:
+
+```text
+You: Hey Claude, clean up your project memory. Remove stale facts, consolidate
+     duplicates, and keep the current decisions.
+Claude: [rewrites its native MEMORY.md]
+mem-sync: [makes that exact cleaned version AGENTS.md and CLAUDE.md]
+Codex next launch: [loads the cleaned version]
+```
+
 If the enabled path is nested below a Git root, mem-sync does not redirect
 Claude's repo-wide native auto-memory directory: doing so would affect a larger
 scope than requested. `AGENTS.md` and `CLAUDE.md` are still synchronized.
