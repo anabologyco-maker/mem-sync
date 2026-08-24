@@ -1,0 +1,15 @@
+[Unit]
+Description=Bidirectional Codex and Claude Code project memory sync
+Documentation=https://github.com/anabologyco-maker/mem-sync
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/opt/mem-sync/bin/mem-sync daemon
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
