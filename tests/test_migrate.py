@@ -20,7 +20,17 @@ def test_codex_session_migration(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
     monkeypatch.setenv("MEM_SYNC_STATE_DIR", str(tmp_path / "state"))
     rollout = sessions / "rollout.jsonl"
-    rollout.write_text(json.dumps({"type": "session_meta", "payload": {"cwd": str(source)}}) + "\n", encoding="utf-8")
+    rollout.write_text(
+        json.dumps(
+            {
+                "type": "session_meta",
+                "payload": {"cwd": str(source), "note": "before\u0085middle\u2028after"},
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     database = codex / "state_5.sqlite"
     with sqlite3.connect(database) as connection:
         connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, cwd TEXT, rollout_path TEXT)")
@@ -33,6 +43,7 @@ def test_codex_session_migration(monkeypatch, tmp_path):
         assert connection.execute("SELECT cwd FROM threads WHERE id='abc'").fetchone()[0] == str(target)
     record = json.loads(rollout.read_text(encoding="utf-8"))
     assert record["payload"]["cwd"] == str(target)
+    assert record["payload"]["note"] == "before\u0085middle\u2028after"
 
 
 def test_migration_validates_source(monkeypatch, tmp_path):
@@ -70,7 +81,18 @@ def test_claude_session_migration(monkeypatch, tmp_path):
     source_bucket = claude / "projects" / str(source).replace("/", "-")
     source_bucket.mkdir(parents=True)
     transcript = source_bucket / "claude-session.jsonl"
-    transcript.write_text(json.dumps({"cwd": str(source), "type": "user"}) + "\n", encoding="utf-8")
+    transcript.write_text(
+        json.dumps(
+            {
+                "cwd": str(source),
+                "type": "user",
+                "text": "before\u0085middle\u2028after",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CODEX_HOME", str(codex))
     monkeypatch.setenv("CODEX_SQLITE_HOME", str(codex))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude))
@@ -81,4 +103,6 @@ def test_claude_session_migration(monkeypatch, tmp_path):
     moved = Path(result["transcript"])
     assert result["agent"] == "claude"
     assert moved.exists() and not transcript.exists()
-    assert json.loads(moved.read_text(encoding="utf-8"))["cwd"] == str(target)
+    record = json.loads(moved.read_text(encoding="utf-8"))
+    assert record["cwd"] == str(target)
+    assert record["text"] == "before\u0085middle\u2028after"

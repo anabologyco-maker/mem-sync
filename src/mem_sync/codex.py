@@ -68,12 +68,17 @@ def harvest_codex_memories(root: Path, state_path: Path) -> int:
 
 
 def rewrite_rollout_session_cwd(path: Path, source: Path, target: Path) -> bool:
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    # str.splitlines() also breaks on Unicode separators such as U+0085 and
+    # U+2028. Those are valid inside JSON strings and are not JSONL record
+    # boundaries, so splitting on them would corrupt the transcript.
+    lines = path.read_text(encoding="utf-8").split("\n")
     if not lines:
         return False
     changed = False
     output: list[str] = []
     for line in lines:
+        if not line:
+            continue
         record = json.loads(line)
         if record.get("type") == "session_meta":
             payload = record.get("payload", {})
@@ -84,4 +89,3 @@ def rewrite_rollout_session_cwd(path: Path, source: Path, target: Path) -> bool:
     if changed:
         atomic_write(path, "".join(output))
     return changed
-

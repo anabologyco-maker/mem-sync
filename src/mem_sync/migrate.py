@@ -98,7 +98,11 @@ def _migrate_codex(session_id: str, source: Path, target: Path, dry_run: bool) -
 
 def _rewrite_claude_jsonl(path: Path, source: Path, target: Path) -> None:
     output: list[str] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    # Split only on the JSONL delimiter. str.splitlines() also splits valid
+    # in-string Unicode separators and can turn one JSON record into several.
+    for line in path.read_text(encoding="utf-8").split("\n"):
+        if not line:
+            continue
         record = json.loads(line)
         if record.get("cwd") == str(source):
             record["cwd"] = str(target)
