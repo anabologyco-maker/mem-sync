@@ -93,7 +93,7 @@ def neutral_merge(sources: list[tuple[str, str]]) -> str:
         return nonempty[0][1]
     parts = [
         "# Shared project memory\n\n",
-        "> mem-sync preserved multiple pre-existing sources without assigning either agent priority.\n",
+        "> mem-sync preserved multiple pre-existing sources without assigning source priority.\n",
     ]
     for name, content in nonempty:
         parts.extend((f"\n## Imported from {name}\n\n", content))

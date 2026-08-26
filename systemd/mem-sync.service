@@ -1,5 +1,5 @@
 [Unit]
-Description=Bidirectional Codex and Claude Code project memory sync
+Description=Shared Codex, Claude Code, and OpenCode project memory sync
 Documentation=https://github.com/anabologyco-maker/mem-sync
 After=local-fs.target
 

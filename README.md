@@ -94,7 +94,7 @@ mem-sync does not continually append every edit:
 - If exactly one surface changed since the previous pass, that complete version
   wins. Multiple identical edits are also unambiguous. Multiple different
   concurrent edits are retained in a labeled neutral union with originals saved
-  under `.mem-sync/conflicts/`; neither agent silently wins.
+  under `.mem-sync/conflicts/`; no harness silently wins.
 - OpenCode V2 reads `AGENTS.md` as project instructions and reconciles changed
   ambient instructions between model attempts. It has no separate documented
   auto-memory store for mem-sync to harvest.
