@@ -1,7 +1,16 @@
+<!-- mem-sync:protocol:v2:start -->
+## Shared agent memory protocol
+
+This project's durable memory is shared by Codex, Claude Code, and OpenCode.
+When the user asks any agent to remember something, record the durable fact in
+this file. When asked to forget, remove it. When asked to clean or consolidate
+memory, rewrite this file to remove stale and duplicate facts while preserving
+current decisions. These edits are authoritative shared changes; never restore
+older text merely because it existed in a prior version. Keep memory concise,
+project-specific, and free of credentials or secrets.
+<!-- mem-sync:protocol:v2:end -->
+
 # Shared project memory
 
-This file is the project-scoped durable context shared by Codex and Claude Code.
-Both agents may update it. Keep stable architecture facts, commands, conventions,
-decisions, and workflow knowledge here; do not store credentials or secrets.
-Cleanup, consolidation, rewrites, and deletions are authoritative shared changes:
-do not restore stale entries merely because they appeared in an older version.
+Keep stable architecture facts, commands, conventions, decisions, and workflow
+knowledge below this heading.

@@ -12,13 +12,23 @@ from .store import atomic_write, read_json, registry_locked, write_json
 
 
 SURFACE_NAMES = ("AGENTS.md", "CLAUDE.md")
+PROTOCOL_VERSION = 2
+PROTOCOL = """<!-- mem-sync:protocol:v2:start -->
+## Shared agent memory protocol
+
+This project's durable memory is shared by Codex, Claude Code, and OpenCode.
+When the user asks any agent to remember something, record the durable fact in
+this file. When asked to forget, remove it. When asked to clean or consolidate
+memory, rewrite this file to remove stale and duplicate facts while preserving
+current decisions. These edits are authoritative shared changes; never restore
+older text merely because it existed in a prior version. Keep memory concise,
+project-specific, and free of credentials or secrets.
+<!-- mem-sync:protocol:v2:end -->
+"""
 DEFAULT_MEMORY = """# Shared project memory
 
-This file is the project-scoped durable context shared by Codex and Claude Code.
-Both agents may update it. Keep stable architecture facts, commands, conventions,
-decisions, and workflow knowledge here; do not store credentials or secrets.
-Cleanup, consolidation, rewrites, and deletions are authoritative shared changes:
-do not restore stale entries merely because they appeared in an older version.
+Keep stable architecture facts, commands, conventions, decisions, and workflow
+knowledge below this heading.
 """
 
 
@@ -28,6 +38,12 @@ def utc_now() -> str:
 
 def digest(data: str) -> str:
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def with_protocol(content: str) -> str:
+    if "<!-- mem-sync:protocol:v2:start -->" in content:
+        return content
+    return PROTOCOL.rstrip() + "\n\n" + content.lstrip()
 
 
 def project_dir(root: Path) -> Path:
@@ -166,7 +182,7 @@ def enable(root_value: str | os.PathLike[str] | None = None) -> dict[str, Any]:
     if native_memory is not None:
         existing_sources.append(("Claude auto memory", native_memory))
 
-    merged = neutral_merge(existing_sources)
+    merged = with_protocol(neutral_merge(existing_sources))
     atomic_write(memory, merged)
     for name in SURFACE_NAMES:
         replace_with_hardlink(root / name, memory)
@@ -178,6 +194,7 @@ def enable(root_value: str | os.PathLike[str] | None = None) -> dict[str, Any]:
 
     state = {
         "version": 1,
+        "protocol_version": PROTOCOL_VERSION,
         "enabled": True,
         "root": str(root),
         "enabled_at": utc_now(),
@@ -241,6 +258,13 @@ def sync_project(root_value: str | os.PathLike[str]) -> dict[str, Any]:
         state.setdefault("conflicts", []).append(str(conflict_dir))
     else:
         merged = safe_read(canonical_file(root)) or neutral_merge(available)
+
+    # Upgrade existing enabled projects exactly once. After recording the
+    # version, later user/agent cleanup remains authoritative even if it removes
+    # or rewrites this protocol block.
+    if int(state.get("protocol_version", 1)) < PROTOCOL_VERSION:
+        merged = with_protocol(merged)
+        state["protocol_version"] = PROTOCOL_VERSION
 
     atomic_write(canonical_file(root), merged)
     for name in SURFACE_NAMES:
@@ -306,4 +330,22 @@ def status(root_value: str | os.PathLike[str] | None = None) -> dict[str, Any]:
     state["shadowing_files"] = [
         str(path) for path in shadow_candidates if (safe_read(path) or "").strip()
     ]
+    state["adapters"] = {
+        "codex": {
+            "installed": shutil.which("codex") is not None,
+            "instruction_surface": "AGENTS.md",
+            "native_memory_harvest": True,
+        },
+        "claude-code": {
+            "installed": shutil.which("claude") is not None,
+            "instruction_surface": "CLAUDE.md",
+            "native_memory_linked": state.get("claude_memory_mode") == "linked",
+        },
+        "opencode": {
+            "installed": shutil.which("opencode") is not None,
+            "instruction_surface": "AGENTS.md",
+            "native_memory_harvest": False,
+            "live_instruction_updates": True,
+        },
+    }
     return state

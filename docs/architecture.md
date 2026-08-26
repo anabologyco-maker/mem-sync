@@ -2,7 +2,7 @@
 
 ## Design goals
 
-- Symmetric: either agent can change durable memory; source identity never
+- Symmetric: any agent can change durable memory; source identity never
   determines precedence.
 - Project-scoped: enabling `/a/b` does not edit `/a` or user-global memory.
 - Auditable: canonical memory is Markdown, conflicts retain both originals,
@@ -19,7 +19,7 @@
                           /         |         \
                          /          |          \
                   AGENTS.md     CLAUDE.md    Claude auto-memory/
-                    Codex       Claude Code       MEMORY.md + topics
+               Codex+OpenCode  Claude Code       MEMORY.md + topics
                          \          |          /
                           \         |         /
                            background reconciler
@@ -34,6 +34,12 @@ Claude's native project memory directory points at the canonical memory
 directory when the requested scope is exactly the Git root. The daemon repairs
 atomic-save link breaks, mirrors cross-filesystem fallbacks, and imports new
 Codex background-memory records associated with the root or its descendants.
+
+OpenCode needs no native-memory link: its supported project instruction surface
+is `AGENTS.md`, so it reads and edits the same canonical inode as Codex. A
+versioned protocol in that file defines remember, forget, and cleanup behavior
+for all three harnesses. OpenCode does not currently expose a separate durable
+auto-memory surface for mem-sync to harvest.
 
 ## State
 
@@ -88,6 +94,8 @@ semantics.
 - Claude Code: moves `<session-id>.jsonl` between project buckets and rewrites
   top-level `cwd` fields. Companion spilled tool-result directories move with
   it.
+- OpenCode: use its native `/move` command or session-move API. mem-sync does
+  not mutate OpenCode's live SQLite database.
 
 The operation validates that the recorded source matches the caller's source
 argument. It will not silently adopt a session from another project.
@@ -99,5 +107,5 @@ behavior, and orchestration contracts. They are not durable project memory and
 neither vendor exposes the CLI's built-in prompt as a supported editable file.
 Trying to make those prompts identical would weaken the hosts' contracts and
 still would not make their tool semantics equal. mem-sync therefore shares the
-highest portable layer both products officially support: project instructions
-and local durable memory.
+highest portable layer the harnesses officially support: project instructions
+and supported local durable memory.

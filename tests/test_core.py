@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
 
-from mem_sync.core import disable, enable, status, sync_project
+from mem_sync.core import PROTOCOL_VERSION, disable, enable, status, sync_project
 
 
 def configure(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
@@ -29,6 +30,7 @@ def test_enable_merges_without_priority_and_links_surfaces(monkeypatch, tmp_path
 
     shared = (project / ".mem-sync/memory/MEMORY.md").read_text(encoding="utf-8")
     assert "Codex fact" in shared and "Claude fact" in shared
+    assert "Codex, Claude Code, and OpenCode" in shared
     assert os.path.samefile(project / "AGENTS.md", project / "CLAUDE.md")
     assert result["enabled"] is True
     assert status(project)["surfaces"]["AGENTS.md"]["hardlinked"] is True
@@ -95,3 +97,55 @@ def test_claude_cleanup_is_authoritative_and_does_not_restore_removed_text(monke
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == expected
     assert (project / "CLAUDE.md").read_text(encoding="utf-8") == expected
     assert "stale fact" not in native_memory.read_text(encoding="utf-8")
+
+
+def test_existing_project_gets_one_time_opencode_protocol_upgrade(monkeypatch, tmp_path):
+    project, _ = configure(monkeypatch, tmp_path)
+    enable(project)
+    state_path = project / ".mem-sync/state.json"
+    canonical = project / ".mem-sync/memory/MEMORY.md"
+
+    # Simulate a project enabled by v0.1, before OpenCode was explicit.
+    canonical.write_text("# Existing memory\n\n- keep this fact\n", encoding="utf-8")
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.pop("protocol_version", None)
+    old_hash = hashlib.sha256(canonical.read_bytes()).hexdigest()
+    state["hashes"] = {name: old_hash for name in ("AGENTS.md", "CLAUDE.md", "canonical")}
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    upgraded = sync_project(project)
+    first = canonical.read_text(encoding="utf-8")
+    sync_project(project)
+    second = canonical.read_text(encoding="utf-8")
+
+    assert upgraded["protocol_version"] == PROTOCOL_VERSION
+    assert first.count("mem-sync:protocol:v2:start") == 1
+    assert "keep this fact" in first
+    assert second == first
+
+
+def test_status_declares_opencode_instruction_adapter(monkeypatch, tmp_path):
+    project, _ = configure(monkeypatch, tmp_path)
+    enable(project)
+
+    adapter = status(project)["adapters"]["opencode"]
+
+    assert adapter["instruction_surface"] == "AGENTS.md"
+    assert adapter["live_instruction_updates"] is True
+    assert adapter["native_memory_harvest"] is False
+
+
+def test_opencode_agents_edit_propagates_to_claude(monkeypatch, tmp_path):
+    project, _ = configure(monkeypatch, tmp_path)
+    enable(project)
+
+    # OpenCode edits AGENTS.md, often via atomic rename.
+    replacement = project / "AGENTS.new"
+    replacement.write_text("# Clean shared memory\n\n- OpenCode decision\n", encoding="utf-8")
+    os.replace(replacement, project / "AGENTS.md")
+    sync_project(project)
+
+    expected = "# Clean shared memory\n\n- OpenCode decision\n"
+    assert (project / "CLAUDE.md").read_text(encoding="utf-8") == expected
+    native = Path(status(project)["claude_project_dir"]) / "memory" / "MEMORY.md"
+    assert native.read_text(encoding="utf-8") == expected

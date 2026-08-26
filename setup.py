@@ -5,8 +5,8 @@ from setuptools import find_packages, setup
 
 setup(
     name="codex-claude-mem-sync",
-    version="0.1.0",
-    description="Project-scoped, bidirectional memory bridge for Codex and Claude Code",
+    version="0.2.0",
+    description="Project-scoped shared memory for Codex, Claude Code, and OpenCode",
     packages=find_packages("src"),
     package_dir={"": "src"},
     python_requires=">=3.10",

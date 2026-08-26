@@ -1,4 +1,3 @@
-"""Bidirectional project-memory bridge for Codex and Claude Code."""
+"""Project-scoped shared memory for Codex, Claude Code, and OpenCode."""
 
-__version__ = "0.1.0"
-
+__version__ = "0.2.0"

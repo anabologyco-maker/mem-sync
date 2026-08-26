@@ -49,7 +49,10 @@ def _any_enabled_projects() -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mem-sync", description="Bidirectional project memory for Codex and Claude Code")
+    parser = argparse.ArgumentParser(
+        prog="mem-sync",
+        description="Project-scoped shared memory for Codex, Claude Code, and OpenCode",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     for command in ("on", "off", "status", "sync"):

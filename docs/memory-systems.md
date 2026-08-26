@@ -1,6 +1,6 @@
-# Codex and Claude Code memory-system map
+# Codex, Claude Code, and OpenCode memory-system map
 
-Research baseline: 2026-08-24. Upstream behavior can change; links below are
+Research baseline: 2026-08-26. Upstream behavior can change; links below are
 the official vendor documentation used for this implementation.
 
 ## Codex
@@ -55,7 +55,7 @@ user-controlled stack.
   notification, profile, and telemetry fields are intentionally ignored here.
 - Extra developer prompt text: the `developer_instructions` config key or a
   configured `model_instructions_file`; these are not the built-in product
-  prompt and are not synced by v0.1.
+  prompt and are not synced by v0.2.
 - Hooks: `hooks.json` or inline `[hooks]` beside each active config layer.
 - Command rules: `rules/*.rules` beside active config layers.
 - Skills: `.agents/skills/` from CWD through repo root, then
@@ -177,10 +177,47 @@ Official sources: [Manage sessions](https://code.claude.com/docs/en/sessions) an
 The built-in Claude Code system prompt is runtime product behavior. Supported
 customization surfaces include output styles, `--append-system-prompt`, and the
 Agent SDK's preset/custom prompt API. `CLAUDE.md` is separate project context.
-mem-sync maps only the latter to Codex project guidance.
+mem-sync maps only the latter to shared project guidance.
 
 Official sources: [Modifying system prompts](https://code.claude.com/docs/en/agent-sdk/modifying-system-prompts)
 and [Output styles](https://code.claude.com/docs/en/output-styles).
+
+## OpenCode
+
+### Project instructions and live updates
+
+OpenCode V2's ambient project-instruction surface is `AGENTS.md`. It loads a
+global file from `$XDG_CONFIG_HOME/opencode/AGENTS.md` and the `AGENTS.md` chain
+from the current location toward the project and home roots. Nested instruction
+files are discovered when OpenCode reads files in those directories. Before
+each model attempt, OpenCode reconciles changed ambient instructions and can
+inject a replacement system update, so daemon changes do not require restarting
+the harness.
+
+This makes the mem-sync adapter intentionally small: OpenCode reads the managed
+root `AGENTS.md`, which is the same canonical inode Codex and Claude Code use.
+The v0.2 shared-memory protocol tells OpenCode that remember, forget, and cleanup
+requests are edits to that file. OpenCode does not document a separate automatic
+durable-memory store, so there is no native memory database to harvest.
+
+Official source: [OpenCode V2 instructions](https://opencode.ai/v2/docs/instructions).
+
+### Configuration, agents, and sessions
+
+- Global configuration defaults to `~/.config/opencode/opencode.json` (or the
+  XDG equivalent); project configuration may use `opencode.json[c]` and
+  `.opencode/` resources.
+- Custom agents, skills, commands, plugins, MCP configuration, permissions, and
+  provider credentials are executable or machine-specific state and are not
+  copied by mem-sync.
+- OpenCode persists sessions in local application data. Its supported CLI can
+  export and import sessions, and the TUI provides `/move` to change a session's
+  project. mem-sync uses that native boundary rather than editing OpenCode's
+  live SQLite database.
+
+Official sources: [OpenCode agents](https://opencode.ai/v2/docs/agents),
+[OpenCode CLI](https://opencode.ai/docs/cli), and
+[session move API](https://v2.opencode.ai/docs/api/session/v2-session-move/).
 
 ## Deliberately unsynced
 
