@@ -93,8 +93,17 @@ mem-sync does not continually append every edit:
   after Claude or Codex cleans that section up, the daemon does not resurrect it.
 - If exactly one surface changed since the previous pass, that complete version
   wins. Multiple identical edits are also unambiguous. Multiple different
-  concurrent edits are retained in a labeled neutral union with originals saved
-  under `.mem-sync/conflicts/`; no harness silently wins.
+  concurrent edits are retained in a labeled neutral union that always includes
+  canonical memory itself, with every version saved under `.mem-sync/conflicts/`;
+  no harness silently wins and the union never drops what only canonical held.
+- A surface rewound by version control is not an edit. `git stash`, `git
+  checkout`, and `git restore` replace the file instead of writing through it,
+  which breaks the hard link and leaves the committed revision in the working
+  tree. mem-sync ignores that copy and restores the link when the text is
+  exactly what is committed at `HEAD` *and* canonical memory already carries it
+  verbatim, so nothing is discarded. An edit fails the first test and a `git
+  pull` that brings genuinely new instructions fails the second; both are still
+  treated as authoritative changes.
 - OpenCode V2 reads `AGENTS.md` as project instructions and reconciles changed
   ambient instructions between model attempts. It has no separate documented
   auto-memory store for mem-sync to harvest.
@@ -165,6 +174,17 @@ For development:
 ```bash
 cd /opt/mem-sync
 python3 -m pytest
+```
+
+Updating an installed host is a pull. The daemon notices that its own source
+changed and exits so the service manager restarts it into the new code, which
+is why the bundled unit sets `Restart=always`. Reinstall the unit after
+upgrading from a release older than 0.2.1:
+
+```bash
+cd /opt/mem-sync && git pull
+sudo mem-sync install-service   # only needed once, to pick up Restart=always
+systemctl status mem-sync
 ```
 
 ## Security and limits

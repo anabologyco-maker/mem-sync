@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-claude-mem-sync"
-version = "0.2.0"
+version = "0.2.1"
 description = "Project-scoped shared memory for Codex, Claude Code, and OpenCode"
 readme = "README.md"
 requires-python = ">=3.10"

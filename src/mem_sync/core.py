@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import subprocess
 from typing import Any
 
 from .paths import discover_claude_project_dir, git_root, resolve_root
@@ -98,6 +99,45 @@ def neutral_merge(sources: list[tuple[str, str]]) -> str:
     for name, content in nonempty:
         parts.extend((f"\n## Imported from {name}\n\n", content))
     return "".join(parts)
+
+
+def head_blob(root: Path, name: str) -> str | None:
+    """Return the committed text of ``name``, or None if git can't supply it."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "show", f"HEAD:./{name}"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return None if result.returncode else result.stdout
+
+
+def is_reverted_copy(root: Path, name: str, content: str, canonical: str | None) -> bool:
+    """True when version control rewound a surface instead of an agent editing it.
+
+    `git stash`, `git checkout`, and `git restore` replace the surface file
+    rather than writing through it: the hard link to canonical memory breaks and
+    the working tree receives whatever the commit held. Read as an edit, that
+    rewinds shared memory to the committed revision and drops everything learned
+    since — and when both surfaces are rewound at once it reads as a conflict,
+    which merged the project's memory down to two stale copies.
+
+    Two signals together identify the rewind safely. The text must be exactly
+    what is committed at HEAD, which an ordinary edit is not, and canonical
+    memory must already carry that text verbatim, so ignoring it discards
+    nothing. A pull that brings genuinely new instructions fails the second test
+    and is still treated as an edit.
+    """
+    if canonical is None or name not in SURFACE_NAMES:
+        return False
+    body = content.strip()
+    if not body or body not in canonical:
+        return False
+    return head_blob(root, name) == content
 
 
 def replace_with_hardlink(path: Path, canonical: Path) -> None:
@@ -236,6 +276,7 @@ def sync_project(root_value: str | os.PathLike[str]) -> dict[str, Any]:
 
     candidates = _candidate_files(root, state)
     previous = state.get("hashes", {})
+    canonical_content = safe_read(canonical_file(root))
     changed: list[tuple[str, str]] = []
     available: list[tuple[str, str]] = []
     for name, path in candidates:
@@ -246,6 +287,14 @@ def sync_project(root_value: str | os.PathLike[str]) -> dict[str, Any]:
         if digest(content) != previous.get(name):
             changed.append((name, content))
 
+    # A surface rewound by version control is not an edit; canonical memory
+    # already holds its text, so restoring the link is the whole repair.
+    changed = [
+        (name, content)
+        for name, content in changed
+        if not is_reverted_copy(root, name, content, canonical_content)
+    ]
+
     unique_changed = {digest(content): (name, content) for name, content in changed}
     if len(unique_changed) == 1:
         merged = next(iter(unique_changed.values()))[1]
@@ -254,10 +303,18 @@ def sync_project(root_value: str | os.PathLike[str]) -> dict[str, Any]:
         conflict_dir.mkdir(parents=True, exist_ok=True)
         for name, content in changed:
             atomic_write(conflict_dir / name.replace("/", "_"), content)
-        merged = neutral_merge(changed)
+        # Canonical memory is a merge source, never a casualty: whatever it
+        # holds that no changed surface carries has to survive the conflict.
+        # It is snapshotted alongside the conflicting copies so a bad merge
+        # stays recoverable.
+        sources = list(changed)
+        if canonical_content is not None:
+            atomic_write(conflict_dir / "canonical.md", canonical_content)
+            sources.insert(0, ("canonical memory", canonical_content))
+        merged = neutral_merge(sources)
         state.setdefault("conflicts", []).append(str(conflict_dir))
     else:
-        merged = safe_read(canonical_file(root)) or neutral_merge(available)
+        merged = canonical_content or neutral_merge(available)
 
     # Upgrade existing enabled projects exactly once. After recording the
     # version, later user/agent cleanup remains authoritative even if it removes

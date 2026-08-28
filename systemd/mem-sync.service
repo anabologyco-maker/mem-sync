@@ -6,7 +6,9 @@ After=local-fs.target
 [Service]
 Type=simple
 ExecStart=/opt/mem-sync/bin/mem-sync daemon
-Restart=on-failure
+# The daemon exits cleanly when its own source changes on disk, so pulling an
+# update applies it on the next restart. That needs always, not on-failure.
+Restart=always
 RestartSec=2
 NoNewPrivileges=true
 PrivateTmp=true
